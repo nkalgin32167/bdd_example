@@ -2,21 +2,27 @@ package bdd.example.behaviors;
 
 import bdd.example.api.BaseApi;
 import bdd.example.utils.SettingsManager;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import io.cucumber.datatable.DataTable;
 import io.cucumber.java.After;
 import io.cucumber.java.Before;
+import io.cucumber.java.Scenario;
 import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.restassured.response.Response;
+import org.hamcrest.Matchers;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static bdd.example.utils.Utils.getCurrentSession;
 import static org.hamcrest.CoreMatchers.*;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class BaseBehavior {
     private static final SettingsManager settingsManager = SettingsManager.getInstance();
@@ -24,7 +30,9 @@ public class BaseBehavior {
 
 
     @Before
-    public void initialization() {
+    public void initialization(Scenario scenario) {
+        List<String> tags = (List<String>) scenario.getSourceTagNames();
+        System.out.println(tags);
         if (System.getProperty("baseURI") != null) {
             getCurrentSession().put("baseURI", System.getProperty("baseURI"));
         } else {
@@ -83,30 +91,9 @@ public class BaseBehavior {
                 });
                 break;
             case "update ":
-
         }
     }
 
-    @Given("^(?:(?:failed )'(.*)' )?((?:get )|(?:create )|(?:delete )|(?:update )|(?:download ))?order '([\\w\\d-]*)'?")
-    public void workWithStore(String failed, String type, String name, String group, String fileName, String delimiter) {
-        if (failed == null) {
-            switch (type) {
-                case "create ":
-
-                    break;
-                case "get ":
-
-                    break;
-                case "delete ":
-
-                    break;
-                case "update ":
-
-            }
-        } else {
-
-        }
-    }
 
     @Given("we have an empty pet shop")
     public void weHaveAnEmptyPetShop() {
@@ -135,10 +122,32 @@ public class BaseBehavior {
         Map<String, Integer> finalIds = (Map<String, Integer>) getCurrentSession().get("ids");
         finalIds.entrySet().forEach(s -> {
             baseApi.getResponseFromDELETE("pet/" + s.getValue())
-            .then().assertThat().statusCode(200);
+                    .then().assertThat().statusCode(200);
             baseApi.getResponseFromGET("pet/" + s)
                     .then().assertThat().statusCode(404);
         });
 
+    }
+
+    @Given("^create api element with body$")
+    public void createApiElementWithBody(String StringBody) {
+        JsonObject body = new Gson().fromJson(StringBody, JsonObject.class);
+        Response response = baseApi.getResponseFromPOST(body, "pet");
+        response.then().assertThat().statusCode(200);
+        getCurrentSession().put("latestResponse", response);
+    }
+
+    @Then("^response body should be like$")
+    public void responseBodyShouldBeLike(String StringBody) {
+        Response response = (Response) getCurrentSession().get("latestResponse");
+        String expected = StringBody
+                .replaceAll("[\\s]*", "").replaceAll("\\n", "");
+        String actual = response.body().prettyPrint()
+                .replaceAll("[\\s]*", "").replaceAll("\\n", "");
+        Pattern pattern = Pattern.compile(Pattern.quote(expected));
+        Matcher matcher = pattern.matcher(actual);
+        assertThat(
+                String.format("Expected line like: '%s', actual is '%s'", expected, actual),
+                matcher.matches(), Matchers.is(true));
     }
 }
